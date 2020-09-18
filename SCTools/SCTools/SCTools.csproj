@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <VersionPrefix>0.4.0</VersionPrefix>
+    <VersionPrefix>0.5.0</VersionPrefix>
     <AssemblyTitle>Star Citizen : Tools</AssemblyTitle>
     <Description>Star Citizen : Tools</Description>
     <Authors>Denis Ibragimov</Authors>
@@ -17,6 +17,9 @@
     <LangVersion>8</LangVersion>
     <ApplicationIcon>app-icon.ico</ApplicationIcon>
     <NoWin32Manifest>true</NoWin32Manifest>
+    <StartupObject>NSW.StarCitizen.Tools.Program</StartupObject>
+    <Nullable>enable</Nullable>
+    <Version>0.5.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

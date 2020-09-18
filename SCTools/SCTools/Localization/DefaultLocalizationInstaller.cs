@@ -13,36 +13,36 @@ namespace NSW.StarCitizen.Tools.Localization
     {
         public InstallStatus Install(string zipFileName, string destinationFolder)
         {
-            DirectoryInfo unpackDataDir = null;
-            DirectoryInfo backupDataDir = null;
-            DirectoryInfo dataPathDir = new DirectoryInfo(GameConstants.GetDataFolderPath(destinationFolder));
+            DirectoryInfo? unpackDataDir = null;
+            DirectoryInfo? backupDataDir = null;
+            var dataPathDir = new DirectoryInfo(GameConstants.GetDataFolderPath(destinationFolder));
             try
             {
-                string unpackDataDirPath = Path.Combine(destinationFolder, "temp_" + Path.GetRandomFileName());
+                var unpackDataDirPath = Path.Combine(destinationFolder, "temp_" + Path.GetRandomFileName());
                 unpackDataDir = Directory.CreateDirectory(unpackDataDirPath);
                 if (!Unpack(zipFileName, unpackDataDir.FullName))
                 {
                     return InstallStatus.PackageError;
                 }
-                string newLibraryPath = Path.Combine(unpackDataDir.FullName, GameConstants.PatcherOriginalName);
-                FileCertVerifier libraryCertVerifier = new FileCertVerifier(Resources.CoreSigning);
+                var newLibraryPath = Path.Combine(unpackDataDir.FullName, GameConstants.PatcherOriginalName);
+                using var libraryCertVerifier = new FileCertVerifier(Resources.CoreSigning);
                 if (!libraryCertVerifier.VerifyFile(newLibraryPath))
                 {
                     return InstallStatus.VerifyError;
                 }
                 if (dataPathDir.Exists)
                 {
-                    string backupDataDirPath = Path.Combine(destinationFolder, "backup_" + Path.GetRandomFileName());
+                    var backupDataDirPath = Path.Combine(destinationFolder, "backup_" + Path.GetRandomFileName());
                     Directory.Move(dataPathDir.FullName, backupDataDirPath);
                     backupDataDir = new DirectoryInfo(backupDataDirPath);
                 }
                 Directory.Move(GameConstants.GetDataFolderPath(unpackDataDir.FullName), dataPathDir.FullName);
                 if (backupDataDir != null)
                 {
-                    DeleteDirectoryRecursive(backupDataDir);
+                    FileUtils.DeleteDirectoryNoThrow(backupDataDir, true);
                     backupDataDir = null;
                 }
-                string enabledLibraryPath = GameConstants.GetEnabledPatcherPath(destinationFolder);
+                var enabledLibraryPath = GameConstants.GetEnabledPatcherPath(destinationFolder);
                 if (File.Exists(enabledLibraryPath))
                 {
                     File.Delete(enabledLibraryPath);
@@ -50,7 +50,7 @@ namespace NSW.StarCitizen.Tools.Localization
                 }
                 else
                 {
-                    string disabledLibraryPath = GameConstants.GetDisabledPatcherPath(destinationFolder);
+                    var disabledLibraryPath = GameConstants.GetDisabledPatcherPath(destinationFolder);
                     if (File.Exists(disabledLibraryPath))
                     {
                         File.Delete(disabledLibraryPath);
@@ -74,7 +74,7 @@ namespace NSW.StarCitizen.Tools.Localization
             {
                 if (unpackDataDir != null)
                 {
-                    DeleteDirectoryRecursive(unpackDataDir);
+                    FileUtils.DeleteDirectoryNoThrow(unpackDataDir, true);
                 }
                 if (backupDataDir != null)
                 {
@@ -82,6 +82,21 @@ namespace NSW.StarCitizen.Tools.Localization
                 }
             }
             return InstallStatus.Success;
+        }
+
+        public UninstallStatus Uninstall(string destinationFolder)
+        {
+            var enabledLibraryPath = GameConstants.GetEnabledPatcherPath(destinationFolder);
+            if (File.Exists(enabledLibraryPath) && !FileUtils.DeleteFileNoThrow(enabledLibraryPath))
+                return UninstallStatus.Failed;
+            var result = UninstallStatus.Success;
+            var disabledLibraryPath = GameConstants.GetDisabledPatcherPath(destinationFolder);
+            if (File.Exists(disabledLibraryPath) && !FileUtils.DeleteFileNoThrow(disabledLibraryPath))
+                result = UninstallStatus.Partial;
+            var dataPathDir = new DirectoryInfo(GameConstants.GetDataFolderPath(destinationFolder));
+            if (dataPathDir.Exists && !FileUtils.DeleteDirectoryNoThrow(dataPathDir, true))
+                result = UninstallStatus.Partial;
+            return result;
         }
 
         public LocalizationInstallationType GetInstallationType(string destinationFolder)
@@ -95,8 +110,8 @@ namespace NSW.StarCitizen.Tools.Localization
 
         public LocalizationInstallationType RevertLocalization(string destinationFolder)
         {
-            string enabledLibraryPath = GameConstants.GetEnabledPatcherPath(destinationFolder);
-            string disabledLibraryPath = GameConstants.GetDisabledPatcherPath(destinationFolder);
+            var enabledLibraryPath = GameConstants.GetEnabledPatcherPath(destinationFolder);
+            var disabledLibraryPath = GameConstants.GetDisabledPatcherPath(destinationFolder);
 
             if (File.Exists(enabledLibraryPath))
             {
@@ -120,8 +135,8 @@ namespace NSW.StarCitizen.Tools.Localization
             {
                 return false;
             }
-            bool dataExtracted = false;
-            bool coreExtracted = false;
+            var dataExtracted = false;
+            var coreExtracted = false;
             var rootEntry = archive.Entries[0];
             var dataPathStart = GameConstants.DataFolderName + "/";
             //extract only data folder and core module
@@ -129,7 +144,7 @@ namespace NSW.StarCitizen.Tools.Localization
             {
                 if (entry.FullName.StartsWith(rootEntry.FullName, true, CultureInfo.InvariantCulture))
                 {
-                    string relativePath = entry.FullName.Substring(rootEntry.FullName.Length);
+                    var relativePath = entry.FullName.Substring(rootEntry.FullName.Length);
                     if (string.IsNullOrEmpty(entry.Name) && relativePath.EndsWith("/"))
                     {
                         var dir = Path.Combine(destinationFolder, relativePath);
@@ -151,27 +166,18 @@ namespace NSW.StarCitizen.Tools.Localization
             return dataExtracted && coreExtracted;
         }
 
-        private static void DeleteDirectoryRecursive(DirectoryInfo dir)
-        {
-            try
-            {
-                dir.Delete(true);
-            }
-            catch {}
-        }
-
         private static void RestoreDirectory(DirectoryInfo dir, DirectoryInfo destDir)
         {
             if (dir.Exists)
             {
                 try
                 {
-                    DeleteDirectoryRecursive(destDir);
+                    FileUtils.DeleteDirectoryNoThrow(destDir, true);
                     Directory.Move(dir.FullName, destDir.FullName);
                 }
                 catch
                 {
-                    DeleteDirectoryRecursive(dir);
+                    FileUtils.DeleteDirectoryNoThrow(dir, true);
                 }
             }
         }
